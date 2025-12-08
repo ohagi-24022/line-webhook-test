@@ -1,107 +1,102 @@
-// ===============================
-// server.js（テキスト返信 + 画像保存 完全対応）
-// ===============================
-
 const express = require("express");
 const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-
 const app = express();
+
 app.use(express.json());
 
-// --- LINE のチャネルアクセストークンを設定 ---
-const LINE_TOKEN = process.env.LINE_TOKEN || "ここに長期アクセストークンを入れる";
+// === 必須 === あなたの LINE チャネルアクセストークン
+const LINE_TOKEN = "あなたのチャネルアクセストークン";
 
-// --- 画像保存フォルダ（Renderの場合、/tmp のみ書き込み可能） ---
-const IMAGE_SAVE_DIR = "/tmp/images";
-if (!fs.existsSync(IMAGE_SAVE_DIR)) {
-  fs.mkdirSync(IMAGE_SAVE_DIR, { recursive: true });
-}
+// === あなたの LINE ユーザーID ===
+const USER_ID = "あなたのユーザーID";
 
-// =======================================================
-// Webhook 受信
-// =======================================================
-app.post("/webhook", async (req, res) => {
-  console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+// ------------------------------------------------------
+// LINE → M5Stick に送る色の最新値
+// ------------------------------------------------------
+let latestColor = "#000000";
 
-  // イベントを取得
-  const events = req.body.events;
-  if (!events || events.length === 0) {
-    return res.sendStatus(200);
-  }
-
-  // 全イベントを処理
-  for (const event of events) {
-    const replyToken = event.replyToken;
-
-    // ---- ① テキストメッセージの処理 ----
-    if (event.type === "message" && event.message.type === "text") {
-      const userText = event.message.text;
-
-      await replyText(replyToken, `受け取りました！あなたのメッセージ：${userText}`);
-    }
-
-    // ---- ② 画像メッセージの処理 ----
-    if (event.type === "message" && event.message.type === "image") {
-      const messageId = event.message.id;
-
-      // LINEサーバーから画像を取得
-      const imageBuffer = await downloadImage(messageId);
-
-      // 保存パス
-      const filename = `${Date.now()}.jpg`;
-      const savePath = path.join(IMAGE_SAVE_DIR, filename);
-
-      fs.writeFileSync(savePath, imageBuffer);
-
-      // ユーザーへ返信
-      await replyText(replyToken, `画像を受け取りました！保存しました。\nファイル名：${filename}`);
-    }
-  }
-
-  res.sendStatus(200);
+// ------------------------------------------------------
+// M5Stick が色を取得する API
+// ------------------------------------------------------
+app.get("/getColor", (req, res) => {
+  res.json({ color: latestColor });
 });
 
-// =======================================================
-// LINEにテキスト返信
-// =======================================================
-async function replyText(replyToken, text) {
+// ------------------------------------------------------
+// LINE Webhook で色を受信
+// ------------------------------------------------------
+app.post("/webhook", async (req, res) => {
+  try {
+    const events = req.body.events;
+
+    for (const event of events) {
+      if (event.type === "message" && event.message.type === "text") {
+        const text = event.message.text.trim();
+
+        // 色コードまたは色名か？
+        if (/^#?[0-9A-Fa-f]{6}$/.test(text) || /^[a-zA-Z]+$/.test(text)) {
+          latestColor = text.startsWith("#") ? text : text.toLowerCase();
+          console.log("Color updated:", latestColor);
+
+          await replyMessage(event.replyToken, `色を ${latestColor} に設定しました！`);
+        } else {
+          await replyMessage(event.replyToken, "色（例：red, blue, #00FF00）を送ってください！");
+        }
+      }
+    }
+    res.sendStatus(200);
+  } catch (e) {
+    console.error(e);
+    res.sendStatus(500);
+  }
+});
+
+// ------------------------------------------------------
+// M5Stick → LINE へ通知するAPI
+// ------------------------------------------------------
+app.post("/sendMessage", async (req, res) => {
+  const message = req.body.message || "メッセージ無し";
+
+  try {
+    await axios.post(
+      "https://api.line.me/v2/bot/message/push",
+      {
+        to: USER_ID,
+        messages: [{ type: "text", text: message }]
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${LINE_TOKEN}`
+        }
+      }
+    );
+
+    res.json({ status: "ok" });
+  } catch (error) {
+    console.log("LINE error:", error.response?.data || error);
+    res.status(500).json({ error: "send failed" });
+  }
+});
+
+// ------------------------------------------------------
+async function replyMessage(replyToken, text) {
   return axios.post(
     "https://api.line.me/v2/bot/message/reply",
     {
-      replyToken: replyToken,
-      messages: [{ type: "text", text: text }],
+      replyToken,
+      messages: [{ type: "text", text }]
     },
     {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${LINE_TOKEN}`,
-      },
+        Authorization: `Bearer ${LINE_TOKEN}`
+      }
     }
   );
 }
 
-// =======================================================
-// LINEサーバーから画像を取得
-// =======================================================
-async function downloadImage(messageId) {
-  const url = `https://api-data.line.me/v2/bot/message/${messageId}/content`;
-
-  const response = await axios.get(url, {
-    responseType: "arraybuffer",
-    headers: {
-      Authorization: `Bearer ${LINE_TOKEN}`,
-    },
-  });
-
-  return response.data;
-}
-
-// =======================================================
-// サーバー起動
-// =======================================================
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log("Server running on " + port);
 });
