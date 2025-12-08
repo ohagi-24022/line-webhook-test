@@ -5,10 +5,9 @@ const app = express();
 app.use(express.json());
 
 // === 必須 === あなたの LINE チャネルアクセストークン
-const LINE_TOKEN = "あなたのチャネルアクセストークン";
-
+const LINE_TOKEN = "PWc7jghwyIT4tzUFtsW1WdpIVokAWpNGiZXbnC4Y4tq0hYksEwGgINQzsKHPVBwnyam4Iw6NWt9OC5oQMo5iM9WiqAa+KXvuay/w1HfwyOmSa7Hkf8rQWjA9BtdTPZXZEw/nCOC/V0sO1guuzA6wlAdB04t89/1O/w1cDnyilFU=";
 // === あなたの LINE ユーザーID ===
-const USER_ID = "あなたのユーザーID";
+const USER_ID = "U295868a1a9d84506cae46d7bab74415e";
 
 // ------------------------------------------------------
 // LINE → M5Stick に送る色の最新値
