@@ -25,19 +25,30 @@ app.get("/getColor", (req, res) => {
 });
 
 // ------------------------------------------------------
-// LINE Webhook
+// LINE Webhook 受信
 // ------------------------------------------------------
 app.post("/webhook", async (req, res) => {
   try {
+    console.log("Webhook payload:", JSON.stringify(req.body, null, 2));
+
     const events = req.body.events;
 
+    // ★ 修正：events が無い場合でも 200 を返して LINE から切断されないようにする
+    if (!events || !Array.isArray(events)) {
+      console.log("Invalid webhook payload");
+      return res.sendStatus(200);
+    }
+
     for (const event of events) {
+      // テキスト以外は無視
       if (event.type === "message" && event.message.type === "text") {
         const text = event.message.text.trim();
 
+        // 色コード or 色名の判定
         if (/^#?[0-9A-Fa-f]{6}$/.test(text) || /^[a-zA-Z]+$/.test(text)) {
           latestColor = text.startsWith("#") ? text : text.toLowerCase();
           console.log("Color updated:", latestColor);
+
           await replyMessage(event.replyToken, `色を ${latestColor} に設定しました！`);
         } else {
           await replyMessage(event.replyToken, "色（例：red, blue, #00FF00）を送ってください！");
@@ -47,13 +58,13 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
   } catch (e) {
-    console.error(e);
+    console.error("Webhook error:", e);
     res.sendStatus(500);
   }
 });
 
 // ------------------------------------------------------
-// push メッセージ
+// M5Stick → LINE push メッセージ
 // ------------------------------------------------------
 app.post("/sendMessage", async (req, res) => {
   const message = req.body.message || "メッセージ無し";
@@ -80,6 +91,8 @@ app.post("/sendMessage", async (req, res) => {
   }
 });
 
+// ------------------------------------------------------
+// reply メッセージ
 // ------------------------------------------------------
 async function replyMessage(replyToken, text) {
   return axios.post(
