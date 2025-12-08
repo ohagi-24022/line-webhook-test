@@ -1,3 +1,7 @@
+console.log("USER_ID =", USER_ID);
+console.log("LINE_TOKEN =", LINE_TOKEN ? "OK" : "EMPTY");
+
+
 const express = require("express");
 const axios = require("axios");
 const app = express();
